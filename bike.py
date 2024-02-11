@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 import numpy as np
 
+
+
 df = pd.DataFrame()
 if 'df' in st.session_state:
     df = st.session_state.df
@@ -18,17 +20,21 @@ if 'slider_end' in st.session_state:
 whole_file = str()
 if 'whole_file' in st.session_state:
     whole_file = st.session_state.whole_file
-    st.write('AHA')
-    st.write(len(whole_file) + len(st.session_state.whole_file))
+    #st.write('AHA')
+    #st.write(len(whole_file) + len(st.session_state.whole_file))
 
 bg_color = 'white'
 earth_radius = 6378 # in km
 weight0 = 102    # rider's weight in kilograms
 weight_bike0 = 11  # in kilogramg
 
-weight_bike = st.sidebar.text_input('Weight of your bike? (kg)', weight_bike0)
+left, right = st.sidebar.columns(2)
+weight_bike = left.text_input('Weight of your bike? (kg)', weight_bike0)
+bike_type = right.selectbox('Type of your bike:', ('road', 'trekking/gravel', 'MTB'), 0)
+tire_resistance = (bike_type=='road')*5 + (bike_type=='trekking/gravel')*6 + (bike_type=='MTB')*8
 weight = st.sidebar.text_input('Your weight? (kg)', weight0)
 
+#@st.cache_data
 def miros_filter(df, col, new_col):
     df['delta'] = 0
     df['delta'] = round(df[col].shift(-1) - ((df[col]+df[col].shift(-2))/2), 3)
@@ -36,33 +42,32 @@ def miros_filter(df, col, new_col):
     return df
 
 
-def profile_plot(df, y, start, end, bg_color=bg_color, place=st):
-    fig, ax1 = plt.subplots(facecolor = 'grey')
-    fig.set_facecolor('grey')
+def profile_plot(df, start, end, left, right, left_color, right_color, bg_color=bg_color, place=st):
+    fig, ax1 = plt.subplots(facecolor = bg_color)
+    fig.set_facecolor(bg_color)
 
     plt.grid(which='major', axis='both' ,linestyle = 'dashed', linewidth = 1)
-    lab = 'watts'
-    if y[:3] == 'ele':
-        lab = 'metres'
-    plt.ylabel(lab, fontweight='bold', color='white')
-    plt.plot(df.index, df[y], linestyle='-', color="#ddbb88")
+
+    plt.plot(df.index[start:end], df[left][start:end], linestyle='-', color=left_color)
+    
     plt.plot()
    
-    color = 'tab:red'
+    
     ax1.set_xlabel('time (s)')
-    ax1.set_ylabel(lab, color=color)
-    ax1.plot(df.index[start:end], df[y][start:end], linestyle='-', color="#ffaa00")
-    ax1.tick_params(axis='y', labelcolor=color)
+    ax1.set_ylabel(left, color=left_color)
+    ax1.plot(df.index[slider_start:slider_end], df[left][slider_start:slider_end], linestyle='-', color=left_color)
 
     ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
 
-    color = 'tab:blue'
-    ax2.set_ylabel('', color=color)  # we already handled the x-label with ax1
-    ax2.plot(df.index[start:end], df['latitude'][start:end], linestyle='-', color="#ffaa00")
-    ax2.tick_params(axis='y', labelcolor=color)
+    color = right_color
+    ax2.set_ylabel(right, color=right_color)  # we already handled the x-label with ax1
+    plt.plot(df.index[start:end], df[right][start:end], linestyle='-', color=right_color)
+    ax2.fill_between(df.index[slider_start:slider_end], df[right][slider_start:slider_end]-df[right][slider_start:slider_end], df[right][slider_start:slider_end], alpha = 0.7, color='grey')
+    ax2.tick_params(axis='y', labelcolor=right_color)
+    ax1.set_ylabel(left, color=left_color)
    
     
-    plt.title(y, fontweight='bold', color = 'dodgerblue')
+    plt.title(right +' vs. '+left, fontweight='bold', color = 'black')
     fig.set_size_inches(6, 2)
     return place.pyplot(fig, ax1, ax2)
 
@@ -73,17 +78,47 @@ def gpx_message(item, label, where=st.sidebar):
         where.write(f':green[{label} data] observed in GPX file :)')
         return
     
+def power_estimate(df, tr, ar):
+    '''
+    Parameters
+    ----------
+    df : input datafraame
+    tr : tire resistance - in promiles, 5 means rolling power coefficient of 0.005
+    ar : air resistance - nominal, is equal to F/velocity-quared, cca 0.2 for a orad cyclist
+
+    Returns
+    -------
+    dataframe df with the 'power estimate' column
+
+    '''
+    df['d_Ek'] = df['Ek'] - df['Ek'].shift(1)
+    df['friction'] = (9.81 * df['dist7'] * tr /1000 * (float(weight_bike) + float(weight))) + (df['dist_2'] * ar * df['dist7'])
+    df['power estimate0'] = df['d_Ek'] + df['d_Ep'] + df['friction']
     
+    df['delta_E0'] = np.where(df['power estimate0'] < 0, -df['power estimate0'], 0)
+    df['power estimate1'] = df['d_Ek'] + df['d_Ep'] + df['friction']-df['delta_E0'].shift(-1)
+    df['delta_E1'] = np.where(df['power estimate1'] < 0, -df['power estimate1'], 0)
+    df['power estimate2'] = df['d_Ek'] + df['d_Ep'] + df['friction']-df['delta_E1'].shift(-1)
+    
+    df = miros_filter(df, 'power estimate2', 'power estimate3')
+    df = miros_filter(df, 'power estimate3', 'power estimate4')
+    df = miros_filter(df, 'power estimate4', 'power estimate5')
+    df['power estimate6'] = (df['power estimate5'].shift(-2)+df['power estimate5'].shift(-1)+df['power estimate5']+df['power estimate5'].shift(1)+df['power estimate5'].shift(2))/5
+    df['power estimate7'] = (df['power estimate6'].shift(-2)+df['power estimate6'].shift(-1)+df['power estimate6']+df['power estimate6'].shift(1)+df['power estimate6'].shift(2))/5 
+    df['power estimate'] = np.where(df['power estimate7'] < 0, 0, df['power estimate7'])
+    return df
+
     
 # user can upload a gpx file which is then stored as a df
 
-#uploaded_file = st.sidebar.file_uploader("Upload your GPX file", type=["gpx"], accept_multiple_files=False)
+uploaded_file = st.sidebar.file_uploader("Upload your GPX file", type=["gpx"], accept_multiple_files=False)
+if uploaded_file is not None:
+    whole_file = st.session_state.whole_file = str(uploaded_file.read())
 
-
-button1 = st.sidebar.button('*Load r1*')
+button1 = st.sidebar.button('*Load JuRaVa*')
 #on pressing left "Add" button, the text from the text_input will be included into the STOCKS list 
 if button1:
-    with open('r1.gpx', 'r') as uploaded_file:   #toto prec
+    with open('JuRaVa.gpx', 'r') as uploaded_file:   #toto prec
         whole_file = st.session_state.whole_file = str(uploaded_file.read()) #toto dole
         
 
@@ -113,9 +148,10 @@ if len(whole_file)>100:
     counter = 0
     records = []
     t_string, lat_string, lon_string = '0', '0', '0'
+    date = times[3][0:10]
     for part in times:
         #st.write(f'time : {part[11:20]}')
-        t_string = part[11:20]
+        t_string = part[11:19]
         for i in items:
             string[i]='0'
             if part.count('<'+i+'>')>0:
@@ -150,10 +186,10 @@ if len(whole_file)>100:
     df = df[df.elevation!=0]
     df = df.reset_index()
     len_df = len(df)
-    st.write(df)
+    #st.write(df)
     d = df.describe()
     power_meter = d['power']['mean']!=0
-    st.write(d)
+    #st.write(d)
     
     label = {'latitude':'latitude',
             'longitude':'longitude', 'elevation':'elevation', 'power':'power',
@@ -163,32 +199,15 @@ if len(whole_file)>100:
             'hr', 'temp','cad'): 
         gpx_message(item, label[item], where=st.sidebar)
 
-        
-    if 'slider_start' not in st.session_state:
-        slider_start = round(len_df/3)  
-    if 'slider_end' not in st.session_state:
-        slider_end = round(2*len_df/3) 
-    track_slider = st.slider('**Seconds to consider?**  ', 0, len_df, (slider_start, slider_end))# (round(len_df/7), round(6*len_df/7)))
-    st.session_state.slider_start = slider_start = track_slider[0]
-    st.session_state.slider_end = slider_end = track_slider[1]
-    
-    #st.map(df, latitude='latitude', longitude='longitude', size=0.1, color=[0,0,255])
-   
-    #st.area_chart(df, y="elevation")
-
+# SUMMARY
     df['d_lat'] = df.latitude - df.latitude.shift()
-    df['d_lon'] = df.longitude - df.longitude.shift()
-    
-    
-    
+    df['d_lon'] = df.longitude - df.longitude.shift() 
     df = miros_filter(df, 'elevation', 'ele1')
     df = miros_filter(df, 'ele1', 'ele2')
     df = miros_filter(df, 'ele2', 'ele3')
-    
-    
     radius = earth_radius * 1000  # in metres
-    # zvislo   df.d_lat/180*np.pi*radius
-    # vodorovne   np.cos(df.lat)*df.d_lon/180*np.pi*radius
+    # verticaly   df.d_lat/180*np.pi*radius
+    # horizontaly   np.cos(df.lat)*df.d_lon/180*np.pi*radius
     df['d'] = np.pi*radius/180*(df.d_lat**2 + (np.cos(df.latitude)*df.d_lon)**2)**0.5
     df['dist'] = (df['d'].shift(1)+df['d']+df['d'].shift(-1)+df['d'].shift(-2))/4
     
@@ -211,6 +230,52 @@ if len(whole_file)>100:
     #df['total_dist'] = df['dist7'].cumsum()
     df['dist_2'] = df['dist7'].shift(1) * df['dist7'] #a['#a['dist7']**2
     df['Ek'] = (float(weight) + float(weight_bike))/2*df['dist_2']
+    #df = power_estimate(df, tire_resistance, 0.2)
+    df['dist5sec'] = df['dist7'].shift(-2) + df['dist7'].shift(-1) + df['dist7'] + df['dist7'].shift(1) + df['dist7'].shift(2)
+    df['slope'] = (df['dist5sec']>8)*(df['d_ele'].shift(-2) + df['d_ele'].shift(-1) + df['d_ele'] + df['d_ele'].shift(1) + df['d_ele'].shift(2) )/df['dist5sec']  
+    
+    
+    d = df.describe(percentiles = [.1,.25,.5])
+    st.write(f'Your route from **{date}** started at **{df["time"][df.index.min()]}** and ended at **{df["time"][df.index.max()]}**.')
+    st.write()
+    st.write(f"Your elevation ranged between {round(d['elevation']['min'])}m and {round(d['elevation']['max'])}m above see level and you overall gained **{round(df[df['d_ele']>0]['d_ele'].sum())}m**.")
+    st.write(f"Steepest ascend was **{round(100*d['slope']['max'],1)}%** and steepest descend was **{-round(100*d['slope']['min'],1)}%**.")
+    st.write()
+    if 0 != d['temp']['max'] or d['temp']['min'] !=0:
+        st.write(f'Temperature ranged between **{round(d["temp"]["10%"])}** and **{round(d["temp"]["max"])}** degrees with median value of **{round(d["temp"]["50%"])}** degrees.')
+    if 0 != d['hr']['max']:
+        st.write(f"Your heart rate ranged between {d['hr']['min']}bpm and {d['hr']['max']}bpm with median value of {d['hr']['50%']}bpm.")
+    if 0 != d['cad']['max']:
+        st.write(f"Your cadence ranged between **{round(d['cad']['10%'])}rpm** and **{round(d['cad']['max'])}rpm** with median value of **{round(d['cad']['50%'])}rpm**.")
+
+    st.write(f"Your speed ranged between **{round(3.6*d['dist7']['10%'],1)}km/h** and **{round(3.6*d['dist7']['max'],1)}km/h** with median value of **{round(3.6*d['dist7']['50%'],1)}km/h** (average **{round(3.6*d['dist7']['mean'],1)}km/h**).")
+    st.write()
+    if power_meter:
+        st.write(f"Your average power was **{round(d['power']['mean'])} watts**, when pedalling even **{round(df[df['power']>0]['power'].mean())} watts**.")
+    else:
+        df = power_estimate(df, tire_resistance, 0.2)
+        #st.write(df[200:550])
+        st.write(f"Your average power is estimated to **{round(df['power estimate'].mean())} watts**, when pedalling even **{round(df[df['power estimate']>0]['power estimate0'].mean())} watts**.")
+    #st.write(d)
+    
+    st.write('-----------------------------------------------------')
+    
+    
+        
+    if 'slider_start' not in st.session_state:
+        slider_start = round(len_df/3)  
+    if 'slider_end' not in st.session_state:
+        slider_end = round(2*len_df/3)
+    slider_start, slider_end = 356, 539 #1110, 1220
+    track_slider = st.slider('**Seconds to consider?**  ', 0, len_df, (slider_start, slider_end))# (round(len_df/7), round(6*len_df/7)))
+    st.session_state.slider_start = slider_start = track_slider[0]
+    st.session_state.slider_end = slider_end = track_slider[1]
+    
+    #st.map(df, latitude='latitude', longitude='longitude', size=0.1, color=[0,0,255])
+   
+    #st.area_chart(df, y="elevation")
+
+
     #df['total_dist_2'] = df['dist_2'].cumsum()
     
     #a = df.loc[track_slider[0]:track_slider[1], ]#[(df.index>1000) & (df.index<2000)]#[(df.index > (3760-30)) & (df.index < (3760+20)) ]#& (df.power == 0)][['power', 'dist', 'ele', 'd_ele', 'E', 'Ek']]
@@ -228,12 +293,48 @@ if len(whole_file)>100:
     #else:
     #    X = a[['total_dist', 'ones']]# a[['total_dist', 'total_dist_2', 'ones']]
     #X = a[['total_dist_2']]
-
-    profile_plot(df, 'elevation', max(0, round(0.8*slider_start)), min(len(df), round(1.2*slider_end)),  bg_color=bg_color, place=st)
+    
+    # PLOTS
+    dd = df.describe(percentiles = [.1, .9])
+    variable = st.selectbox('What to color on a map?', ('speed', 'elevation', 'slope', 'cadence'),0)
+    min_value = dd['dist7']['10%']
+    max_value = dd['dist7']['90%']
+    var_range = (max_value - min_value)
+    if variable == 'speed':
+        df['dist7'] = df['dist7'].fillna(0)
+        df['rel'] = round((df['dist7']-min_value)/var_range,1)
+        df['red'] = (df['rel']-0.5)/0.25
+        df['red'] = round(255*(df['red']))
+        df['red'] = np.where(df['red'] < 0, 0, df['red'])
+        df['red'] = np.where(df['red'] > 255, 255, df['red'])
+        #df['red'] = 255
+        
+        df['green'] = np.where(df['rel']<0.25, df['rel']/0.25,1)
+        df['green'] = np.where(df['rel']>0.75, (1-df['rel'])/0.25,  df['green'])
+        df['green'] = round(255*(df['green']))
+        df['green'] = np.where(df['green'] < 0, 0, df['green'])
+        df['green'] = np.where(df['green'] > 255, 255, df['green'])
+        #df['green'] = 0
+        
+        df['blue'] = (0.5-df['rel'])/0.25
+        df['blue'] = np.where(df['rel']<0.25, 1, df['blue'])
+        df['blue'] = np.where(df['rel']>0.5, 0, df['blue'])
+        df['blue'] = round(255*(df['blue']))
+        df['blue'] = np.where(df['blue'] < 0, 0, df['blue'])
+        df['blue'] = np.where(df['blue'] > 255, 255, df['blue'])
+        #df['blue'] = 0
+        df['color speed'] = list(zip(df.red/255, df.green/255, df.blue/255))#(df['dist7']-min_value)*/var_range
+    
+    st.write(df[['red','green','blue','rel']])
+    dff = df[100:150]
+    dff = dff.reset_index()
+    st.map(dff, latitude='latitude', longitude='longitude', size = 0.2, color='color speed')
+    
+    profile_plot(df, max(0, round(0.8*slider_start)), min(len(df), round(1.2*slider_end)), 'elevation', 'dist7', 'green', 'red',  bg_color=bg_color, place=st)
     df['color'] = "#ddbb88" 
     #st.write(df)
     df['color'][slider_start:slider_end] = "#ffaa00"
-    st.map(df, latitude='latitude', longitude='longitude', size = 0.2, color='color')
+    
    
     if not power_meter:
         st.write('Without powermeter data you can estimate your average power or resistance coefficients:')
@@ -241,24 +342,11 @@ if len(whole_file)>100:
         no_pm = c1.selectbox('I want to estimate:', ('none', 'power', 'resistance coefficients - no pedaling'), 0)
         if no_pm == 'power':
             tr_str = c2.text_input('Enter tire resistance coeff (in promiles):', '4')
-            ar_str = c3.text_input('Enter air resistance coeff (in BLABLA):', '2')
+            ar_str = c3.text_input('Enter air resistance coeff (in BLABLA):', '0.2')
             ar = float(ar_str)
             tr = float(tr_str)
-            df['d_Ek'] = df['Ek'] - df['Ek'].shift(1)
-            df['power estimate0'] = df['d_Ek'] + df['d_Ep'] + (df['dist7'] * tr /1000 * (float(weight_bike) + float(weight))) + (df['dist_2'] * ar)
-            
-            df['delta_E0'] = np.where(df['power estimate0'] < 0, -df['power estimate0'], 0)
-            df['power estimate1'] = df['d_Ek'] + df['d_Ep'] + (df['dist7'] * tr /1000 * (float(weight_bike) + float(weight))) + (df['dist_2'] * ar)-df['delta_E0'].shift(-1)
-            df['delta_E1'] = np.where(df['power estimate1'] < 0, -df['power estimate1'], 0)
-            df['power estimate2'] = df['d_Ek'] + df['d_Ep'] + (df['dist7'] * tr /1000 * (float(weight_bike) + float(weight))) + (df['dist_2'] * ar)-df['delta_E1'].shift(-1)
-            
-            df = miros_filter(df, 'power estimate2', 'power estimate3')
-            df = miros_filter(df, 'power estimate3', 'power estimate4')
-            df = miros_filter(df, 'power estimate4', 'power estimate5')
-            df['power estimate6'] = (df['power estimate5'].shift(-2)+df['power estimate5'].shift(-1)+df['power estimate5']+df['power estimate5'].shift(1)+df['power estimate5'].shift(2))/5
-            df['power estimate7'] = (df['power estimate6'].shift(-2)+df['power estimate6'].shift(-1)+df['power estimate6']+df['power estimate6'].shift(1)+df['power estimate6'].shift(2))/5
-            
-            df['power estimate'] = np.where(df['power estimate7'] < 0, 0, df['power estimate7'])
+            df = power_estimate(df, tr, ar)
+            #######
             
             
             profile_plot(df[track_slider[0]:track_slider[1]],'power estimate',0,len(df)-1, bg_color=bg_color, place=st)
@@ -273,22 +361,24 @@ if len(whole_file)>100:
             a['total_dist'] = a['dist7'].cumsum()
             a['tire'] = a['total_dist'] * (float(weight) + float(weight_bike))* 9.81
             a['total_dist_2'] = a['dist_2'].cumsum()
-            X = a[['tire', 'total_dist_2']]
+            a['air'] = a['total_dist_2'] * a['dist7'] 
+            X = a[['tire', 'air']]
             lin_regressor = lin_regressor.fit(X, Y)
     #st.write(X.columns)
             c1.write('intercept:')
             c1.write(lin_regressor.intercept_)
-            c3.write(f'linear/tire coefficient is {-1000 * lin_regressor.coef_[0]}')
-            c3.write(f'quadratic/air coefficient is {-lin_regressor.coef_[1]}')
+            c3.write(f'linear/tire coefficient is {round(-1000 * lin_regressor.coef_[0], 2)}')
+            c3.write(f'quadratic/air coefficient is {-round(lin_regressor.coef_[1], 2)}')
             #st.write(a[['Ep','ele3','Ek']])
-            st.write(Y, lin_regressor.predict(X))
-            st.write((Y-lin_regressor.predict(X)).describe())
-            lin_str = st.text_input('Enter tire resistance coeff (in promiles):')
+            #st.write(Y, lin_regressor.predict(X))
+            #st.write((Y-lin_regressor.predict(X)).describe())
+            lin_str = st.text_input('Enter tire resistance coeff (in promiles):','-0.00659')
             
-            #if lin_str != '':
-            #    Y = -a['Ep'] - a['Ek'] - float(lin_str) * (a['tire'])
-            #    X = a[['total_dist_2']]
-            #    st.write(f'quadratic/air coefficient is {-lin_regressor.coef_[0]}')
+            if lin_str != '':
+                Y = -a['Ep'] - a['Ek'] + float(lin_str) * (a['tire'])
+                X = a[['air']]
+                lin_regressor = lin_regressor.fit(X, Y)
+                st.write(f'quadratic/air coefficient is {-round(lin_regressor.coef_[0], 2)}')
     
     #profile_plot('elevation', track_slider[0], track_slider[1],  bg_color=bg_color, place=st)
             
