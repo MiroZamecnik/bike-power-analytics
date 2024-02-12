@@ -23,12 +23,12 @@ if 'whole_file' in st.session_state:
     #st.write('AHA')
     #st.write(len(whole_file) + len(st.session_state.whole_file))
 
-bg_color = 'white'
+bg_color = "#5c6169"
 earth_radius = 6378 # in km
 weight0 = 102    # rider's weight in kilograms
 weight_bike0 = 11  # in kilogramg
 
-left, right = st.sidebar.columns(2)
+left, right = st.sidebar.columns((3,2))
 weight_bike = left.text_input('Weight of your bike? (kg)', weight_bike0)
 bike_type = right.selectbox('Type of your bike:', ('road', 'trekking/gravel', 'MTB'), 0)
 tire_resistance = (bike_type=='road')*5 + (bike_type=='trekking/gravel')*6 + (bike_type=='MTB')*8
@@ -44,18 +44,16 @@ def miros_filter(df, col, new_col):
 
 def profile_plot(df, start, end, left, right, left_color, right_color, bg_color=bg_color, place=st):
     fig, ax1 = plt.subplots(facecolor = bg_color)
-    fig.set_facecolor(bg_color)
+    ax1.set_facecolor(bg_color)
 
-    plt.grid(which='major', axis='both' ,linestyle = 'dashed', linewidth = 1)
+    plt.grid(which='major', axis='both' ,linestyle = 'dashed', linewidth = 1, alpha = 0.4)
 
     plt.plot(df.index[start:end], df[left][start:end], linestyle='-', color=left_color)
-    
-    plt.plot()
-   
-    
+      
     ax1.set_xlabel('time (s)')
     ax1.set_ylabel(left, color=left_color)
     ax1.plot(df.index[slider_start:slider_end], df[left][slider_start:slider_end], linestyle='-', color=left_color)
+    ax1.tick_params(axis='y', labelcolor=left_color)
 
     ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
 
@@ -64,18 +62,40 @@ def profile_plot(df, start, end, left, right, left_color, right_color, bg_color=
     plt.plot(df.index[start:end], df[right][start:end], linestyle='-', color=right_color)
     ax2.fill_between(df.index[slider_start:slider_end], df[right][slider_start:slider_end]-df[right][slider_start:slider_end], df[right][slider_start:slider_end], alpha = 0.7, color='grey')
     ax2.tick_params(axis='y', labelcolor=right_color)
-    ax1.set_ylabel(left, color=left_color)
-   
+    ax2.set_facecolor(bg_color)
     
     plt.title(right +' vs. '+left, fontweight='bold', color = 'black')
     fig.set_size_inches(6, 2)
     return place.pyplot(fig, ax1, ax2)
 
+def heatmap(variable, min_value, max_value, units='jednotky', place=st):
+    fig, ax = plt.subplots(facecolor = bg_color)
+    fig.set_facecolor(bg_color)
+    plt.grid(which='major', axis='x' ,linestyle = '-', linewidth = 0.1)
+    for i in range(100):
+        rel = i/100
+        if i<25:
+            r,g,b=0,i/25,1
+        elif i<=50:
+            r,g,b  =0,1,(50-i)/25
+        elif i<=75:
+            r,g,b=(i-50)/25,1,0
+        else:
+            r,g,b=1,(100-i)/25,0
+        
+        plt.scatter(10*[min_value+i*(max_value-min_value)/100],[0,1,2,3,4,5,6,7,8,9],marker='.', color=(r, g, b))
+    
+    plt.yticks([])
+    ax.set_xlabel(units, color="#9dfb11")
+    fig.set_size_inches(6, 0.3)
+    return place.pyplot(fig, ax)
+    
+    
 def gpx_message(item, label, where=st.sidebar):
     if d[item]['mean']==0:
-        where.write(f':red[No {label} data] observed in GPX file :(') 
+        where.write(f':lightred[No {label} data] observed in GPX file :(') 
     else:
-        where.write(f':green[{label} data] observed in GPX file :)')
+        where.write(f':#9dfb11[{label} data] observed in GPX file :)')
         return
     
 def power_estimate(df, tr, ar):
@@ -129,12 +149,11 @@ if button2:
         whole_file = st.session_state.whole_file = str(uploaded_file.read())
              
         
-button3 = st.sidebar.button('*Load OJ 2018*')
+button3 = st.sidebar.button('*Load OJ*')
 if button3:
     with open('oj.gpx', 'r') as uploaded_file:   #toto prec
         whole_file = st.session_state.whole_file = str(uploaded_file.read()) 
-     
-st.write(len(whole_file))                     
+                     
 if len(whole_file)>100:
     st.session_state.whole_file = whole_file
     
@@ -142,8 +161,8 @@ if len(whole_file)>100:
     times = whole_file.split('<time>')
     items = ['ele','power', 'hr', 'atemp', 'cad']
     string = dict()
-    for i in items:
-        st.write(f'{i} : {whole_file.count(i)}')
+    #for i in items:
+        #st.write(f'{i} : {whole_file.count(i)}')
 
     counter = 0
     records = []
@@ -176,8 +195,8 @@ if len(whole_file)>100:
             'elevation': float(string['ele']),
             'power': int(string['power']),
             'hr': int(string['hr']),
-            'temp': int(string['atemp']),
-            'cad': int(string['cad'])
+            'temperature': int(string['atemp']),
+            'cadence': int(string['cad'])
         })
 
                    
@@ -193,11 +212,12 @@ if len(whole_file)>100:
     
     label = {'latitude':'latitude',
             'longitude':'longitude', 'elevation':'elevation', 'power':'power',
-            'hr':'heart rate', 'temp':'temperature','cad':'cadence'}
+            'hr':'heart rate', 'temperature':'temperature','cadence':'cadence'}
     for item in ('latitude',
             'longitude', 'elevation','power',
-            'hr', 'temp','cad'): 
+            'hr', 'temperature','cadence'): 
         gpx_message(item, label[item], where=st.sidebar)
+
 
 # SUMMARY
     df['d_lat'] = df.latitude - df.latitude.shift()
@@ -218,7 +238,6 @@ if len(whole_file)>100:
     df = miros_filter(df, 'dist4', 'dist5')
     df = miros_filter(df, 'dist5', 'dist6')
     df = miros_filter(df, 'dist6', 'dist7')
-    
     
     df['d_ele'] = df['ele3'] - df['ele3'].shift()
     df['d_Ep'] = df['d_ele']*(float(weight) + float(weight_bike))*9.81
@@ -241,12 +260,12 @@ if len(whole_file)>100:
     st.write(f"Your elevation ranged between {round(d['elevation']['min'])}m and {round(d['elevation']['max'])}m above see level and you overall gained **{round(df[df['d_ele']>0]['d_ele'].sum())}m**.")
     st.write(f"Steepest ascend was **{round(100*d['slope']['max'],1)}%** and steepest descend was **{-round(100*d['slope']['min'],1)}%**.")
     st.write()
-    if 0 != d['temp']['max'] or d['temp']['min'] !=0:
-        st.write(f'Temperature ranged between **{round(d["temp"]["10%"])}** and **{round(d["temp"]["max"])}** degrees with median value of **{round(d["temp"]["50%"])}** degrees.')
+    if 0 != d['temperature']['max'] or d['temperature']['min'] !=0:
+        st.write(f'Temperature ranged between **{round(d["temperature"]["10%"])}** and **{round(d["temperature"]["max"])}** degrees with median value of **{round(d["temperature"]["50%"])}** degrees.')
     if 0 != d['hr']['max']:
         st.write(f"Your heart rate ranged between {d['hr']['min']}bpm and {d['hr']['max']}bpm with median value of {d['hr']['50%']}bpm.")
-    if 0 != d['cad']['max']:
-        st.write(f"Your cadence ranged between **{round(d['cad']['10%'])}rpm** and **{round(d['cad']['max'])}rpm** with median value of **{round(d['cad']['50%'])}rpm**.")
+    if 0 != d['cadence']['max']:
+        st.write(f"Your cadence ranged between **{round(d['cadence']['10%'])}rpm** and **{round(d['cadence']['max'])}rpm** with median value of **{round(d['cadence']['50%'])}rpm**.")
 
     st.write(f"Your speed ranged between **{round(3.6*d['dist7']['10%'],1)}km/h** and **{round(3.6*d['dist7']['max'],1)}km/h** with median value of **{round(3.6*d['dist7']['50%'],1)}km/h** (average **{round(3.6*d['dist7']['mean'],1)}km/h**).")
     st.write()
@@ -262,16 +281,9 @@ if len(whole_file)>100:
     
     
         
-    if 'slider_start' not in st.session_state:
-        slider_start = round(len_df/3)  
-    if 'slider_end' not in st.session_state:
-        slider_end = round(2*len_df/3)
-    slider_start, slider_end = 356, 539 #1110, 1220
-    track_slider = st.slider('**Seconds to consider?**  ', 0, len_df, (slider_start, slider_end))# (round(len_df/7), round(6*len_df/7)))
-    st.session_state.slider_start = slider_start = track_slider[0]
-    st.session_state.slider_end = slider_end = track_slider[1]
+
     
-    #st.map(df, latitude='latitude', longitude='longitude', size=0.1, color=[0,0,255])
+    #st.map(df, latitude='latitude', longitude='longitude', size=0.1, color=(0,0,255))
    
     #st.area_chart(df, y="elevation")
 
@@ -295,45 +307,61 @@ if len(whole_file)>100:
     #X = a[['total_dist_2']]
     
     # PLOTS
-    dd = df.describe(percentiles = [.1, .9])
-    variable = st.selectbox('What to color on a map?', ('speed', 'elevation', 'slope', 'cadence'),0)
-    min_value = dd['dist7']['10%']
-    max_value = dd['dist7']['90%']
+    #
+    df['velocity'] = 3.6 * df['dist7']
+    dd = df.describe(percentiles = [.01, .99])
+    var_list = ['velocity', 'elevation', 'slope']
+    if power_meter: var_list = var_list + ['power']
+    if dd['cadence']['99%'] > 0: var_list = var_list + ['cadence']
+    
+    variable = st.selectbox('What to color on a map?', var_list ,0)
+    
+    if variable == 'elevation':
+        variable = 'ele3'
+
+    min_value = dd[variable]['1%']
+    max_value = dd[variable]['99%']
     var_range = (max_value - min_value)
-    if variable == 'speed':
-        df['dist7'] = df['dist7'].fillna(0)
-        df['rel'] = round((df['dist7']-min_value)/var_range,1)
-        df['red'] = (df['rel']-0.5)/0.25
-        df['red'] = round(255*(df['red']))
-        df['red'] = np.where(df['red'] < 0, 0, df['red'])
-        df['red'] = np.where(df['red'] > 255, 255, df['red'])
-        #df['red'] = 255
-        
-        df['green'] = np.where(df['rel']<0.25, df['rel']/0.25,1)
-        df['green'] = np.where(df['rel']>0.75, (1-df['rel'])/0.25,  df['green'])
-        df['green'] = round(255*(df['green']))
-        df['green'] = np.where(df['green'] < 0, 0, df['green'])
-        df['green'] = np.where(df['green'] > 255, 255, df['green'])
-        #df['green'] = 0
-        
-        df['blue'] = (0.5-df['rel'])/0.25
-        df['blue'] = np.where(df['rel']<0.25, 1, df['blue'])
-        df['blue'] = np.where(df['rel']>0.5, 0, df['blue'])
-        df['blue'] = round(255*(df['blue']))
-        df['blue'] = np.where(df['blue'] < 0, 0, df['blue'])
-        df['blue'] = np.where(df['blue'] > 255, 255, df['blue'])
-        #df['blue'] = 0
-        df['color speed'] = list(zip(df.red/255, df.green/255, df.blue/255))#(df['dist7']-min_value)*/var_range
     
-    st.write(df[['red','green','blue','rel']])
-    dff = df[100:150]
-    dff = dff.reset_index()
-    st.map(dff, latitude='latitude', longitude='longitude', size = 0.2, color='color speed')
+    df[variable] = df[variable].fillna(0)
+    df['rel'] = round((df[variable]-min_value)/var_range,1)
+    df['red'] = (df['rel']-0.5)/0.25
+    df['red'] = np.where(df['red'] < 0, 0, df['red'])
+    df['red'] = np.where(df['red'] > 1, 1, df['red'])
+
+        
+    df['green'] = np.where(df['rel']<0.25, df['rel']/0.25,1)
+    df['green'] = np.where(df['rel']>0.75, (1-df['rel'])/0.25,  df['green'])
+    df['green'] = np.where(df['green'] < 0, 0, df['green'])
+    df['green'] = np.where(df['green'] > 1, 1, df['green'])
+
+        
+    df['blue'] = (0.5-df['rel'])/0.25
+    df['blue'] = np.where(df['rel']<0.25, 1, df['blue'])
+    df['blue'] = np.where(df['rel']>0.5, 0, df['blue'])
+    df['blue'] = np.where(df['blue'] < 0, 0, df['blue'])
+    df['blue'] = np.where(df['blue'] > 1, 1, df['blue'])
     
-    profile_plot(df, max(0, round(0.8*slider_start)), min(len(df), round(1.2*slider_end)), 'elevation', 'dist7', 'green', 'red',  bg_color=bg_color, place=st)
-    df['color'] = "#ddbb88" 
-    #st.write(df)
-    df['color'][slider_start:slider_end] = "#ffaa00"
+    cols = ['red','green','blue']
+    
+    df['color'] = df[cols].to_numpy().tolist()#np.random.rand(len(df), 3).tolist()#
+    dict_units = {'velocity':'km/h', 'ele3':'metres above see level', 'slope':'DOWN             gradient            UP ', 'cadence':'rotates per minute', 'power':'watts'} 
+    heatmap(variable, min_value, max_value, dict_units[variable])
+    st.map(df, latitude='latitude', longitude='longitude', size = 20, color='color')
+   
+    st.write('------------------------------------------------------')
+    st.write('------------------------------------------------------')
+    if 'slider_start' not in st.session_state:
+        slider_start = round(len_df/3)  
+    if 'slider_end' not in st.session_state:
+        slider_end = round(2*len_df/3)
+    slider_start, slider_end = 356, 539 #1110, 1220
+    track_slider = st.slider('**Seconds to consider?**  ', 0, len_df, (slider_start, slider_end))# (round(len_df/7), round(6*len_df/7)))
+    st.session_state.slider_start = slider_start = track_slider[0]
+    st.session_state.slider_end = slider_end = track_slider[1]
+    
+    profile_plot(df, max(0, round(0.8*slider_start)), min(len(df), round(1.2*slider_end)), 'elevation', 'velocity', "#9dfb11", 'white',  bg_color=bg_color, place=st)
+
     
    
     if not power_meter:
@@ -349,7 +377,7 @@ if len(whole_file)>100:
             #######
             
             
-            profile_plot(df[track_slider[0]:track_slider[1]],'power estimate',0,len(df)-1, bg_color=bg_color, place=st)
+            profile_plot(df, track_slider[0], track_slider[1],'power estimate', 'velocity', "#9dfb11", 'white',  bg_color=bg_color, place=st)
             #st.write(df[track_slider[0]:track_slider[1]][['power estimate0', 'power estimate']].describe())
         if no_pm == 'resistance coefficients - no pedaling':
             c2.write('Please select part of your route without pedaling (climb descend or so). ')
@@ -358,10 +386,10 @@ if len(whole_file)>100:
             a = df[track_slider[0]:track_slider[1]]
             a['Ep'] = a['d_Ep'].cumsum()
             Y = -a['Ep'] - a['Ek']
-            a['total_dist'] = a['dist7'].cumsum()
+            a['total_dist'] = a['dist'].cumsum()
             a['tire'] = a['total_dist'] * (float(weight) + float(weight_bike))* 9.81
-            a['total_dist_2'] = a['dist_2'].cumsum()
-            a['air'] = a['total_dist_2'] * a['dist7'] 
+            a['total_dist_2'] = a['dist_2']* a['dist7'] 
+            a['air'] = a['total_dist_2'].cumsum() 
             X = a[['tire', 'air']]
             lin_regressor = lin_regressor.fit(X, Y)
     #st.write(X.columns)
