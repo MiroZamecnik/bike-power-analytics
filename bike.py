@@ -599,9 +599,3 @@ if len(whole_file)>100:
         df = power_estimate(df, tyre_resistance, air_resistance)
         power_curve = power_curve('power estimate', pc1, pc1)
         show_power_curve(power_curve, pc2)
-
-
-
-
-
-
