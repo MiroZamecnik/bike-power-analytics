@@ -55,9 +55,9 @@ def power_curve(pt, where_table, where_plot, show_yn=True):
 
     '''
     
-    df[pt+' 5s'] = (df[pt] + df[pt].shift(-1) + df[pt].shift(-2) + df[pt].shift(-3) + df[pt].shift(-4))/5
-    df[pt+' 20s'] = (df[pt+' 5s'] + df[pt+' 5s'].shift(-5) + df[pt+' 5s'].shift(-10) + df[pt+' 5s'].shift(-15))/4
-    df[pt+' 1min'] = (df[pt+' 20s'] + df[pt+' 20s'].shift(-20) + df[pt+' 20s'].shift(-40))/3
+    df[pt+' 5sec'] = (df[pt] + df[pt].shift(-1) + df[pt].shift(-2) + df[pt].shift(-3) + df[pt].shift(-4))/5
+    df[pt+' 20sec'] = (df[pt+' 5sec'] + df[pt+' 5sec'].shift(-5) + df[pt+' 5sec'].shift(-10) + df[pt+' 5sec'].shift(-15))/4
+    df[pt+' 1min'] = (df[pt+' 20sec'] + df[pt+' 20sec'].shift(-20) + df[pt+' 20sec'].shift(-40))/3
     counter = 3
     if len(df)> 320:
         counter += 1
@@ -67,31 +67,73 @@ def power_curve(pt, where_table, where_plot, show_yn=True):
         df[pt+' 20min'] = (df[pt+' 5min'] + df[pt+' 5min'].shift(-300) + df[pt+' 5min'].shift(-600) + df[pt+' 5min'].shift(-900))/4
     if len(df)> 3700:
         counter += 1
-        df[pt+' 1h'] = (df[pt+' 20min'] + df[pt+' 20min'].shift(-1200) + df[pt+' 20min'].shift(-2400))/3
+        df[pt+' 1hour'] = (df[pt+' 20min'] + df[pt+' 20min'].shift(-1200) + df[pt+' 20min'].shift(-2400))/3
     
     
-    list_power = df.columns[df.columns.get_loc(pt+' 5s'):df.columns.get_loc(pt+' 5s')+counter].to_list()
+    list_power = df.columns[df.columns.get_loc(pt+' 5sec'):df.columns.get_loc(pt+' 5sec')+counter].to_list()
     power_desc = df[list_power].describe()
     pom = power_desc.transpose()[['max', 'min']]
     pom['POWER CURVE'] = 'max ' + pom.index
-    pom['HR average (bpm)'] = 0
-    pom['HR max (bpm)'] = 0
-    dict_inc = {pt+' 5s':5, pt+' 20s':20, pt+' 1min':60, pt+' 5min':300, pt+' 20min':1200, pt+' 1h':3600}
+    pom['HR avg'] = 0
+    pom['HR max'] = 0
+    dict_inc = {pt+' 5sec':5, pt+' 20sec':20, pt+' 1min':60, pt+' 5min':300, pt+' 20min':1200, pt+' 1hour':3600}
 
     for col in df[list_power]:
         i = df[df[col]==power_desc[col]['max']].index[0]
+        
         if heart_rate:
-            pom['HR average (bpm)'][col]=round(df[i:i+dict_inc[col]]['heart rate'].mean())
-            pom['HR max (bpm)'][col]=round(df[i:i+dict_inc[col]]['heart rate'].max())
+            pom['HR avg'][col]=round(df[i:i+dict_inc[col]]['heart rate'].mean())
+            pom['HR max'][col]=df[i:i+dict_inc[col]]['heart rate'].max()
         df['interval'+col[-5:]] = 0
         df.loc[(df.index > i) & (df.index < i+dict_inc[col]), 'interval'+col[-5:]] = 1
         
     pom['watts'] = round(pom['max'])
     if show_yn:
-        if pom['HR max (bpm)'].max()>0:
-            where_table.dataframe(pom[['POWER CURVE', 'watts', 'HR average (bpm)','HR max (bpm)']], hide_index=True)
+        if pom['HR max'].max()>0:
+            where_table.dataframe(pom[['POWER CURVE', 'watts', 'HR avg','HR max']], hide_index=True)
         else: where_table.dataframe(pom[['POWER CURVE', 'watts']], hide_index=True)
     return pom
+
+def show_power_curve(power_curve, where):
+    fig, ax1 = plt.subplots(facecolor = bg_color)
+    ax1.set_facecolor(bg_color)
+
+    
+    
+    list_times = ['5 seconds', '20 seconds', '1 minute', '5 minutes', '20 minutes', '1 hour']
+    list_times = list_times[:len(power_curve)]
+    
+    plt.scatter(list_times, power_curve.watts,  marker='.', color=primaryColor, s=30)
+    ax1.spines['bottom'].set_color(textColor)
+    ax1.spines['top'].set_color(textColor)
+    ax1.spines['right'].set_color(textColor)
+    ax1.spines['left'].set_color(primaryColor)      
+    
+    ax1.tick_params(axis='y', labelcolor=primaryColor)
+    ax1.tick_params(axis='x', labelcolor=textColor, labelrotation = 90)
+    ax1.set_ylabel('watts', color=primaryColor)  # we already handled the x-label with ax1)
+    plt.plot([str(i) for i in list_times], power_curve.watts, linestyle='dashed', color = primaryColor)
+
+    #color = right_color
+    if power_curve['HR max'].max()>0: 
+        ax2 = ax1.twinx()  # initiate second axes that shares the same x-axis
+        plt.scatter(list_times, power_curve['HR avg'],  marker='.', color=secondaryBackgroundColor, s=30)
+        ax2.set_ylabel('heart rate avg\n (bpm)', color=secondaryBackgroundColor)  # we already handled the x-label with ax1)
+    #ax2.fill_between(df.index[slider_start:slider_end], df[right][slider_start:slider_end]-df[right][slider_start:slider_end], df[right][slider_start:slider_end], alpha = 0.4, color='white')
+        ax2.tick_params(axis='y', labelcolor=secondaryBackgroundColor)
+        ax2.spines['bottom'].set_color(textColor)
+        ax2.spines['top'].set_color(textColor)
+        ax2.spines['right'].set_color(secondaryBackgroundColor)
+        ax2.spines['left'].set_color(primaryColor)
+        plt.plot([str(i) for i in list_times], power_curve['HR avg'], linestyle='dashed', marker='s', color = secondaryBackgroundColor)
+    #ax2.set_facecolor(bg_color)
+
+    plt.grid(which='major', axis='both' ,linestyle = 'dashed', linewidth = 1, alpha = 0.4)
+    fig.set_size_inches(4, 3)
+    return where.pyplot(fig, ax1)
+    
+    
+    return 
 
 def miros_filter(df, col, new_col):
     '''
@@ -545,14 +587,18 @@ if len(whole_file)>100:
 
     # POWER CURVE 
     st.write('----------------------------------------------------------------------------')
+    if power_meter:
+        st.subheader('Power curve based on real data from your power meter device')
+    else: st.subheader('Power curve based on estimates taken into account your speed, elevation changes, weight, bike type,...')
     st.write('----------------------------------------------------------------------------')
     pc1, pc2 = st.columns(2)
     if power_meter:
-        power_curve = power_curve('power', st, st)
+        power_curve = power_curve('power', pc1, pc1)
+        show_power_curve(power_curve, pc2)
     else: 
         df = power_estimate(df, tyre_resistance, air_resistance)
-        power_curve = power_curve('power estimate', st, st)
-
+        power_curve = power_curve('power estimate', pc1, pc1)
+        show_power_curve(power_curve, pc2)
 
 
 
