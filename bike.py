@@ -5,6 +5,7 @@ import matplotlib.ticker as mtick
 from sklearn.linear_model import LinearRegression
 import numpy as np
 
+st.set_page_config(layout="wide")
 primaryColor="#f3ee3b"
 bg_color = backgroundColor="#372f33"
 secondaryBackgroundColor="#8FCB42"
@@ -153,7 +154,7 @@ def miros_filter(df, col, new_col):
 
     '''
     df['delta'] = 0
-    df['delta'] = round(df[col].shift(-1) - ((df[col]*df['time_no']+df[col].shift(-2)*df['time_no'].shift(-2))/(2*df['time_no'].shift(-1))), 3)
+    df['delta'] = round(df[col].shift(-1) - (df[col]+df[col].shift(-2))/2, 3)
     df[new_col] = df[col] + df['delta']/6-df['delta'].shift()/3+df['delta'].shift(2)/6
     return df
 
@@ -243,20 +244,20 @@ def power_estimate(df, tr, ar):
     '''
     df['d_Ek'] = df['Ek'] - df['Ek'].shift(1)
     df['friction'] = (9.81 * df['dist7'] * tr /1000 * (float(weight_bike) + float(weight))) + (df['dist_2'] * ar * df['dist7'])
-    df['power estimate0'] = (df['d_Ek'] + df['d_Ep'] + df['friction'])/(df['time_no']- df['time_no'].shift(1))
+    df['power estimate0'] = df['d_Ek'] + df['d_Ep'] + df['friction']
     
     df['delta_E0'] = np.where(df['power estimate0'] < 0, -df['power estimate0'], 0)
-    #df['power estimate1'] = (df['d_Ek'] + df['d_Ep'] + df['friction'])/(df['time_no']- df['time_no'].shift(1))-df['delta_E0'].shift(-1)
-    #df['delta_E1'] = np.where(df['power estimate1'] < 0, -df['power estimate1'], 0)
-    #df['power estimate2'] = (df['d_Ek'] + df['d_Ep'] + df['friction'])/(df['time_no']- df['time_no'].shift(1))-df['delta_E1'].shift(-1)
+    df['power estimate1'] = df['d_Ek'] + df['d_Ep'] + df['friction']
+    df['delta_E1'] = np.where(df['power estimate1'] < 0, -df['power estimate1'], 0)
+    df['power estimate2'] = df['d_Ek'] + df['d_Ep'] + df['friction']
     
-    #df = miros_filter(df, 'power estimate0', 'power estimate3')
-    #df = miros_filter(df, 'power estimate3', 'power estimate4')
-    #df = miros_filter(df, 'power estimate4', 'power estimate5')
-    #df['power estimate6'] = (df['power estimate5'].shift(-2)+df['power estimate5'].shift(-1)+df['power estimate5']+df['power estimate5'].shift(1)+df['power estimate5'].shift(2))/5
-    #df['power estimate7'] = (df['power estimate6'].shift(-2)+df['power estimate6'].shift(-1)+df['power estimate6']+df['power estimate6'].shift(1)+df['power estimate6'].shift(2))/5 
-    #df['power estimate'] = np.where(df['power estimate7'] < 0, 0, df['power estimate7'])
-    df['power estimate'] = df['power estimate0'].fillna(0)
+    df = miros_filter(df, 'power estimate0', 'power estimate3')
+    df = miros_filter(df, 'power estimate3', 'power estimate4')
+    df = miros_filter(df, 'power estimate4', 'power estimate5')
+    df['power estimate6'] = (df['power estimate5'].shift(-2)+df['power estimate5'].shift(-1)+df['power estimate5']+df['power estimate5'].shift(1)+df['power estimate5'].shift(2))/5
+    df['power estimate7'] = (df['power estimate6'].shift(-2)+df['power estimate6'].shift(-1)+df['power estimate6']+df['power estimate6'].shift(1)+df['power estimate6'].shift(2))/5 
+    df['power estimate'] = np.where(df['power estimate7'] < 0, 0, df['power estimate7'])
+    df['power estimate'] = df['power estimate'].fillna(0)
     return df
 
     
@@ -267,7 +268,7 @@ if uploaded_file is not None:
     whole_file = st.session_state.whole_file = str(uploaded_file.read())
 
 left_b,right_b = st.sidebar.columns(2)
-button1 = left_b.button('**OJ 2018 **')
+button1 = left_b.button('**OJ 2018**')
 #on pressing left "Add" button, the text from the text_input will be included into the STOCKS list 
 if button1:
     with open('OJ 2018.gpx', 'r') as uploaded_file:   #toto prec
@@ -281,7 +282,7 @@ if button2:
         whole_file = st.session_state.whole_file = str(uploaded_file.read())
              
         
-button3 = left_b.button('*OJ 2022*')
+button3 = left_b.button('**OJ 2022**')
 if button3:
     with open('OJ 2022.gpx', 'r') as uploaded_file:   #toto prec
         whole_file = st.session_state.whole_file = str(uploaded_file.read()) 
@@ -296,7 +297,7 @@ if button5:
     with open('NM PK.gpx', 'r') as uploaded_file:   #toto prec
         whole_file = st.session_state.whole_file = str(uploaded_file.read())
 
-button6 = right_b.button('*20 min FTP test**')
+button6 = right_b.button('**20 min FTP test**')
 if button6:
     with open('20minFTP.gpx', 'r') as uploaded_file:   #toto prec
         whole_file = st.session_state.whole_file = str(uploaded_file.read())
@@ -354,13 +355,37 @@ if len(whole_file)>100:
     df = df[df.latitude!=0]
     df = df[df.elevation!=0]
     df = df.reset_index()
-    df['one'] = 1
+    
     len_df = len(df)
     df['time_no'] = 3600 * df['hour'].apply(int) + 60 * df['min'].apply(int) + df['sec'].apply(int)
     start_no = df[['time_no']].describe()['time_no']['min']
     df['time_no'] = df['time_no'] - start_no + 17
+    df['dt'] =  df['time_no'].shift(-1) - df['time_no']
+    cols = df.columns.to_list()
+    st.write(cols)
+    #prev_row = df.rows[0]
+    st.write('your GPS data might not be of highest (1 second) frequency, we need to adjust it.....are working on it, please wait ')
+    for index, row in df.iterrows():
+        if index==0: 
+            prev_row = row
+            prev_index = index
+        elif row['dt']>1:
+            dt = row['dt']
+            for i in range(1, int(dt)):
+                for col in cols:
+                    if col in ('latitude','longitude','elevation','power','heart rate','temperature','cadence','time_no'):
+                        add_row = prev_row
+                        add_row[col]=add_row[col] + i*(row[col]-prev_row[col])/dt
+                df.loc[prev_index+(i/dt)]=add_row
+        prev_row = row
+        prev_index = index
+    st.write('Thank you for your patience, it is done!')
+    df = df.sort_index()
+    df = df[2:]
+    df = df.reset_index()
     st.write(df)
     d = df.describe()
+    df['one'] = 1
     power_meter = d['power']['mean']!=0
     #st.write(d)
     
@@ -376,29 +401,29 @@ if len(whole_file)>100:
 # SUMMARY
     df['d_lat'] = df.latitude - df.latitude.shift(1)
     df['d_lon'] = df.longitude - df.longitude.shift(1) 
-    #df = miros_filter(df, 'elevation', 'ele1')
-    #df = miros_filter(df, 'ele1', 'ele2')
-    #df = miros_filter(df, 'ele2', 'ele3')
-    df['ele3'] = df['elevation'] #namiesto tych miros filterov 
+    df = miros_filter(df, 'elevation', 'ele1')
+    df = miros_filter(df, 'ele1', 'ele2')
+    df = miros_filter(df, 'ele2', 'ele3')
+    #df['ele3'] = df['elevation'] #namiesto tych miros filterov 
     radius = earth_radius * 1000  # in metres
     # verticaly   df.d_lat/180*np.pi*radius
     # horizontaly   np.cos(df.lat)*df.d_lon/180*np.pi*radius
     df['d'] = np.pi*radius/180*(df.d_lat**2 + (np.cos(df.latitude)*df.d_lon)**2)**0.5
     
     # speed = dist
-    df['dist'] = (df['d'].shift(1)+df['d']+df['d'].shift(-1)+df['d'].shift(-2))/(df['time_no'].shift(-2)-df['time_no'].shift(2))
+    df['dist'] = (df['d'].shift(1)+df['d']+df['d'].shift(-1)+df['d'].shift(-2))/4
     
     #st.write(df[['dist','d_lat','latitude']])
     
-    #df = miros_filter(df, 'dist', 'dist1')
-    #df = miros_filter(df, 'dist1', 'dist2')
-    #df = miros_filter(df, 'dist2', 'dist3')
-    #df = miros_filter(df, 'dist3', 'dist4')
-    #df = miros_filter(df, 'dist4', 'dist5')
-    #df = miros_filter(df, 'dist5', 'dist6')
-    #df = miros_filter(df, 'dist6', 'dist7')
+    df = miros_filter(df, 'dist', 'dist1')
+    df = miros_filter(df, 'dist1', 'dist2')
+    df = miros_filter(df, 'dist2', 'dist3')
+    df = miros_filter(df, 'dist3', 'dist4')
+    df = miros_filter(df, 'dist4', 'dist5')
+    df = miros_filter(df, 'dist5', 'dist6')
+    df = miros_filter(df, 'dist6', 'dist7')
     
-    df['dist7'] = df['dist']
+    #df['dist7'] = df['dist']
     
     
     df['d_ele'] = df['ele3'] - df['ele3'].shift()
@@ -417,7 +442,7 @@ if len(whole_file)>100:
     df['dist5obs'] = df['d'].shift(-2) + df['d'].shift(-1) + df['d'] + df['d'].shift(1) + df['d'].shift(2)
     df['slope'] = (df['dist5obs']>5)*(df['d_ele'].shift(-2) + df['d_ele'].shift(-1) + df['d_ele'] + df['d_ele'].shift(1) + df['d_ele'].shift(2) )/df['dist5obs']  
     
-    
+ 
     d = df.describe(percentiles = [.1,.25,.5])
     st.write(f'Your route from **{date}** started at **{df["time"][df.index.min()]}** and ended at **{df["time"][df.index.max()]}**.')
     st.write()
@@ -439,7 +464,8 @@ if len(whole_file)>100:
         st.write(f"Your average power was **{round(d['power']['mean'])} watts**, when pedalling even **{round(df[df['power']>0]['power'].mean())} watts**.")
     else:
         df = power_estimate(df, tyre_resistance, air_resistance)
-        #st.write(df[200:550])
+        st.write(df)
+        st.write(df.describe())
         st.write(f"Your average power is estimated to **{round(df['power estimate'].mean())} watts**, when pedalling even **{round(df[df['power estimate']>0]['power estimate0'].mean())} watts**.")
     #st.write(d)
     
