@@ -1,13 +1,14 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
 from sklearn.linear_model import LinearRegression
 import numpy as np
 
 primaryColor="#f3ee3b"
 bg_color = backgroundColor="#372f33"
-secondaryBackgroundColor="#21832a"
-textColor="#fefae0"
+secondaryBackgroundColor="#8FCB42"
+textColor="#FFFDFD"
 
 
 df = pd.DataFrame()
@@ -33,7 +34,7 @@ weight0 = 100    # rider's weight in kilograms - initial value for text input fi
 weight_bike0 = 11  # bike's weight in kilograms - initial value for text input field
 
 left, right = st.sidebar.columns((3,2))
-weight_bike = left.text_input('Weight of your bike? (kg)', weight_bike0)
+weight_bike = left.text_input(':black[Weight of your bike? (kg)]', weight_bike0)
 bike_type = right.selectbox('Type of your bike:', ('road', 'trekking/gravel', 'MTB'), 0)
 tyre_resistance = (bike_type=='road')*4.2 + (bike_type=='trekking/gravel')*7 + (bike_type=='MTB')*12
 air_resistance = (bike_type=='road')*.185 + (bike_type=='trekking/gravel')*.23 + (bike_type=='MTB')*.25
@@ -111,7 +112,8 @@ def show_power_curve(power_curve, where):
     
     ax1.tick_params(axis='y', labelcolor=primaryColor)
     ax1.tick_params(axis='x', labelcolor=textColor, labelrotation = 90)
-    ax1.set_ylabel('watts', color=primaryColor)  # we already handled the x-label with ax1)
+    ax1.set_ylabel('watts', color=primaryColor) 
+    ax1.xaxis.label.set_color(primaryColor)
     plt.plot([str(i) for i in list_times], power_curve.watts, linestyle='dashed', color = primaryColor)
 
     #color = right_color
@@ -125,6 +127,7 @@ def show_power_curve(power_curve, where):
         ax2.spines['top'].set_color(textColor)
         ax2.spines['right'].set_color(secondaryBackgroundColor)
         ax2.spines['left'].set_color(primaryColor)
+        ax2.xaxis.label.set_color(secondaryBackgroundColor)
         plt.plot([str(i) for i in list_times], power_curve['HR avg'], linestyle='dashed', marker='s', color = secondaryBackgroundColor)
     #ax2.set_facecolor(bg_color)
 
@@ -168,6 +171,7 @@ def profile_plot(df, start, end, left, right, left_color, right_color, bg_color=
     ax1.plot(df.index[slider_start:slider_end], df[left][slider_start:slider_end], linestyle='-', color=left_color)
     ax1.tick_params(axis='y', labelcolor=left_color)
     ax1.tick_params(axis='x', labelcolor=textColor)
+    if left == 'slope' : fig.gca().yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=0))
     ax2 = ax1.twinx()  # initiate second axes that shares the same x-axis
 
     color = right_color
@@ -176,6 +180,7 @@ def profile_plot(df, start, end, left, right, left_color, right_color, bg_color=
     ax2.fill_between(df.index[slider_start:slider_end], df[right][slider_start:slider_end]-df[right][slider_start:slider_end], df[right][slider_start:slider_end], alpha = 0.4, color='white')
     ax2.tick_params(axis='y', labelcolor=right_color)
     ax2.set_facecolor(bg_color)
+    if right == 'slope' : fig.gca().yaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=0))
     ax1.spines['bottom'].set_color(textColor)
     ax1.spines['top'].set_color(textColor)
     ax1.spines['right'].set_color(textColor)
@@ -206,6 +211,7 @@ def heatmap(variable, min_value, max_value, units, place=st):
     
     #ax.xaxis.set_ticks_position('top')
     plt.yticks([])
+    if variable == 'slope' : fig.gca().xaxis.set_major_formatter(mtick.PercentFormatter(1.0, decimals=0))
     ax.tick_params(axis='x', colors=textColor)
     ax.set_xlabel(units, color=primaryColor, weight='bold', size = 15)
     ax.xaxis.set_label_position('top')
@@ -260,30 +266,41 @@ uploaded_file = st.sidebar.file_uploader("Upload your GPX file", type=["gpx"], a
 if uploaded_file is not None:
     whole_file = st.session_state.whole_file = str(uploaded_file.read())
 
-button1 = st.sidebar.button('*Load JuRaVa*')
+left_b,right_b = st.sidebar.columns(2)
+button1 = left_b.button('**OJ 2018 **')
 #on pressing left "Add" button, the text from the text_input will be included into the STOCKS list 
 if button1:
-    with open('JuRaVa.gpx', 'r') as uploaded_file:   #toto prec
+    with open('OJ 2018.gpx', 'r') as uploaded_file:   #toto prec
         whole_file = st.session_state.whole_file = str(uploaded_file.read()) #toto dole
         
 
       
-button2 = st.sidebar.button('*Load pekna8*')
+button2 = right_b.button('**OJ 2020**')
 if button2:
-    with open('pekna8.gpx', 'r') as uploaded_file:   #toto prec
+    with open('OJ 2020.gpx', 'r') as uploaded_file:   #toto prec
         whole_file = st.session_state.whole_file = str(uploaded_file.read())
              
         
-button3 = st.sidebar.button('*Load OJ*')
+button3 = left_b.button('*OJ 2022*')
 if button3:
-    with open('oj.gpx', 'r') as uploaded_file:   #toto prec
+    with open('OJ 2022.gpx', 'r') as uploaded_file:   #toto prec
         whole_file = st.session_state.whole_file = str(uploaded_file.read()) 
 
-button4 = st.sidebar.button('*Load HR-JuRaVa*')
+button4 = right_b.button('**Slnava**')
 if button4:
-    with open('hr.gpx', 'r') as uploaded_file:   #toto prec
+    with open('Slnava.gpx', 'r') as uploaded_file:   #toto prec
         whole_file = st.session_state.whole_file = str(uploaded_file.read()) 
-                     
+
+button5 = left_b.button('**NM PK**')
+if button5:
+    with open('NM PK.gpx', 'r') as uploaded_file:   #toto prec
+        whole_file = st.session_state.whole_file = str(uploaded_file.read())
+
+button6 = right_b.button('*20 min FTP test**')
+if button6:
+    with open('20minFTP.gpx', 'r') as uploaded_file:   #toto prec
+        whole_file = st.session_state.whole_file = str(uploaded_file.read())
+                   
 if len(whole_file)>100:
     st.session_state.whole_file = whole_file
     
@@ -518,7 +535,8 @@ if len(whole_file)>100:
     heatmap(variable, min_value, max_value, dict_units[variable], h2)
     st.map(df, latitude='latitude', longitude='longitude', size = 10, color='color')
    
-    st.write('------------------------------------------------------')
+    st.write('---------------------------------------------------------')
+    st.subheader('Two variable comparison')
     st.write('------------------------------------------------------')
     if 'slider_start' not in st.session_state:
         slider_start = round(len_df/3)  
@@ -529,8 +547,11 @@ if len(whole_file)>100:
     st.session_state.slider_start = slider_start = track_slider[0]
     st.session_state.slider_end = slider_end = track_slider[1]
     col1, col2 = st.columns(2)
-    left_var = col1.selectbox('Left variable to draw?', var_list, 1)
-    right_var = col2.selectbox('Right variable to draw?', var_list, 0)
+    var_list_reduced = []
+    for item in var_list:
+        if item[:3]!='max': var_list_reduced.append(item)
+    left_var = col1.selectbox('Left variable to draw?', var_list_reduced, 1)
+    right_var = col2.selectbox('Right variable to draw?', var_list_reduced, 0)
     
     profile_plot(df, max(0, round(0.8*slider_start)), min(len(df), round(1.2*slider_end)), left_var, right_var, primaryColor, secondaryBackgroundColor,  bg_color=bg_color, place=st)
 
@@ -599,3 +620,9 @@ if len(whole_file)>100:
         df = power_estimate(df, tyre_resistance, air_resistance)
         power_curve = power_curve('power estimate', pc1, pc1)
         show_power_curve(power_curve, pc2)
+
+
+
+
+
+
