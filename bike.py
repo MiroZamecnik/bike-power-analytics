@@ -63,7 +63,7 @@ def power_curve(pt, where_table, where_plot, show_yn=True):
     if len(df)> 320:
         counter += 1
         df[pt+' 5min'] = (df[pt+' 1min'] + df[pt+' 1min'].shift(-60)+ df[pt+' 1min'].shift(-120)+ df[pt+' 1min'].shift(-180)+ df[pt+' 1min'].shift(-240))/5
-    if len(df) > 1300:
+    if len(df) > 1205:
         counter += 1
         df[pt+' 20min'] = (df[pt+' 5min'] + df[pt+' 5min'].shift(-300) + df[pt+' 5min'].shift(-600) + df[pt+' 5min'].shift(-900))/4
     if len(df)> 3700:
@@ -153,7 +153,7 @@ def miros_filter(df, col, new_col):
 
     '''
     df['delta'] = 0
-    df['delta'] = round(df[col].shift(-1) - ((df[col]+df[col].shift(-2))/2), 3)
+    df['delta'] = round(df[col].shift(-1) - ((df[col]*df['time_no']+df[col].shift(-2)*df['time_no'].shift(-2))/(2*df['time_no'].shift(-1))), 3)
     df[new_col] = df[col] + df['delta']/6-df['delta'].shift()/3+df['delta'].shift(2)/6
     return df
 
@@ -243,20 +243,20 @@ def power_estimate(df, tr, ar):
     '''
     df['d_Ek'] = df['Ek'] - df['Ek'].shift(1)
     df['friction'] = (9.81 * df['dist7'] * tr /1000 * (float(weight_bike) + float(weight))) + (df['dist_2'] * ar * df['dist7'])
-    df['power estimate0'] = df['d_Ek'] + df['d_Ep'] + df['friction']
+    df['power estimate0'] = (df['d_Ek'] + df['d_Ep'] + df['friction'])/(df['time_no']- df['time_no'].shift(1))
     
     df['delta_E0'] = np.where(df['power estimate0'] < 0, -df['power estimate0'], 0)
-    df['power estimate1'] = df['d_Ek'] + df['d_Ep'] + df['friction']-df['delta_E0'].shift(-1)
-    df['delta_E1'] = np.where(df['power estimate1'] < 0, -df['power estimate1'], 0)
-    df['power estimate2'] = df['d_Ek'] + df['d_Ep'] + df['friction']-df['delta_E1'].shift(-1)
+    #df['power estimate1'] = (df['d_Ek'] + df['d_Ep'] + df['friction'])/(df['time_no']- df['time_no'].shift(1))-df['delta_E0'].shift(-1)
+    #df['delta_E1'] = np.where(df['power estimate1'] < 0, -df['power estimate1'], 0)
+    #df['power estimate2'] = (df['d_Ek'] + df['d_Ep'] + df['friction'])/(df['time_no']- df['time_no'].shift(1))-df['delta_E1'].shift(-1)
     
-    df = miros_filter(df, 'power estimate2', 'power estimate3')
-    df = miros_filter(df, 'power estimate3', 'power estimate4')
-    df = miros_filter(df, 'power estimate4', 'power estimate5')
-    df['power estimate6'] = (df['power estimate5'].shift(-2)+df['power estimate5'].shift(-1)+df['power estimate5']+df['power estimate5'].shift(1)+df['power estimate5'].shift(2))/5
-    df['power estimate7'] = (df['power estimate6'].shift(-2)+df['power estimate6'].shift(-1)+df['power estimate6']+df['power estimate6'].shift(1)+df['power estimate6'].shift(2))/5 
-    df['power estimate'] = np.where(df['power estimate7'] < 0, 0, df['power estimate7'])
-    df['power estimate'] = df['power estimate'].fillna(0)
+    #df = miros_filter(df, 'power estimate0', 'power estimate3')
+    #df = miros_filter(df, 'power estimate3', 'power estimate4')
+    #df = miros_filter(df, 'power estimate4', 'power estimate5')
+    #df['power estimate6'] = (df['power estimate5'].shift(-2)+df['power estimate5'].shift(-1)+df['power estimate5']+df['power estimate5'].shift(1)+df['power estimate5'].shift(2))/5
+    #df['power estimate7'] = (df['power estimate6'].shift(-2)+df['power estimate6'].shift(-1)+df['power estimate6']+df['power estimate6'].shift(1)+df['power estimate6'].shift(2))/5 
+    #df['power estimate'] = np.where(df['power estimate7'] < 0, 0, df['power estimate7'])
+    df['power estimate'] = df['power estimate0'].fillna(0)
     return df
 
     
@@ -337,6 +337,9 @@ if len(whole_file)>100:
         #st.write('----------------------------------------------')
         records.append({
             'time': t_string,
+            'hour': (t_string[:2]),
+            'min': (t_string[3:5]),
+            'sec': (t_string[6:8]),
             'latitude': float(lat_string),
             'longitude': float(lon_string),
             'elevation': float(string['ele']),
@@ -351,8 +354,12 @@ if len(whole_file)>100:
     df = df[df.latitude!=0]
     df = df[df.elevation!=0]
     df = df.reset_index()
+    df['one'] = 1
     len_df = len(df)
-    #st.write(df)
+    df['time_no'] = 3600 * df['hour'].apply(int) + 60 * df['min'].apply(int) + df['sec'].apply(int)
+    start_no = df[['time_no']].describe()['time_no']['min']
+    df['time_no'] = df['time_no'] - start_no + 17
+    st.write(df)
     d = df.describe()
     power_meter = d['power']['mean']!=0
     #st.write(d)
@@ -367,24 +374,32 @@ if len(whole_file)>100:
 
 
 # SUMMARY
-    df['d_lat'] = df.latitude - df.latitude.shift()
-    df['d_lon'] = df.longitude - df.longitude.shift() 
-    df = miros_filter(df, 'elevation', 'ele1')
-    df = miros_filter(df, 'ele1', 'ele2')
-    df = miros_filter(df, 'ele2', 'ele3')
+    df['d_lat'] = df.latitude - df.latitude.shift(1)
+    df['d_lon'] = df.longitude - df.longitude.shift(1) 
+    #df = miros_filter(df, 'elevation', 'ele1')
+    #df = miros_filter(df, 'ele1', 'ele2')
+    #df = miros_filter(df, 'ele2', 'ele3')
+    df['ele3'] = df['elevation'] #namiesto tych miros filterov 
     radius = earth_radius * 1000  # in metres
     # verticaly   df.d_lat/180*np.pi*radius
     # horizontaly   np.cos(df.lat)*df.d_lon/180*np.pi*radius
     df['d'] = np.pi*radius/180*(df.d_lat**2 + (np.cos(df.latitude)*df.d_lon)**2)**0.5
-    df['dist'] = (df['d'].shift(1)+df['d']+df['d'].shift(-1)+df['d'].shift(-2))/4
     
-    df = miros_filter(df, 'dist', 'dist1')
-    df = miros_filter(df, 'dist1', 'dist2')
-    df = miros_filter(df, 'dist2', 'dist3')
-    df = miros_filter(df, 'dist3', 'dist4')
-    df = miros_filter(df, 'dist4', 'dist5')
-    df = miros_filter(df, 'dist5', 'dist6')
-    df = miros_filter(df, 'dist6', 'dist7')
+    # speed = dist
+    df['dist'] = (df['d'].shift(1)+df['d']+df['d'].shift(-1)+df['d'].shift(-2))/(df['time_no'].shift(-2)-df['time_no'].shift(2))
+    
+    #st.write(df[['dist','d_lat','latitude']])
+    
+    #df = miros_filter(df, 'dist', 'dist1')
+    #df = miros_filter(df, 'dist1', 'dist2')
+    #df = miros_filter(df, 'dist2', 'dist3')
+    #df = miros_filter(df, 'dist3', 'dist4')
+    #df = miros_filter(df, 'dist4', 'dist5')
+    #df = miros_filter(df, 'dist5', 'dist6')
+    #df = miros_filter(df, 'dist6', 'dist7')
+    
+    df['dist7'] = df['dist']
+    
     
     df['d_ele'] = df['ele3'] - df['ele3'].shift()
     df['d_Ep'] = df['d_ele']*(float(weight) + float(weight_bike))*9.81
@@ -399,8 +414,8 @@ if len(whole_file)>100:
     df['dist_2'] = df['dist7'].shift(1) * df['dist7'] #a['#a['dist7']**2
     df['Ek'] = (float(weight) + float(weight_bike))/2*df['dist_2']
 
-    df['dist5sec'] = df['dist7'].shift(-2) + df['dist7'].shift(-1) + df['dist7'] + df['dist7'].shift(1) + df['dist7'].shift(2)
-    df['slope'] = (df['dist5sec']>8)*(df['d_ele'].shift(-2) + df['d_ele'].shift(-1) + df['d_ele'] + df['d_ele'].shift(1) + df['d_ele'].shift(2) )/df['dist5sec']  
+    df['dist5obs'] = df['d'].shift(-2) + df['d'].shift(-1) + df['d'] + df['d'].shift(1) + df['d'].shift(2)
+    df['slope'] = (df['dist5obs']>5)*(df['d_ele'].shift(-2) + df['d_ele'].shift(-1) + df['d_ele'] + df['d_ele'].shift(1) + df['d_ele'].shift(2) )/df['dist5obs']  
     
     
     d = df.describe(percentiles = [.1,.25,.5])
