@@ -30,7 +30,7 @@ weight0 = 100    # rider's weight in kilograms - initial value for text input fi
 weight_bike0 = 11  # bike's weight in kilograms - initial value for text input field
 
 left, right = st.sidebar.columns((3,2))
-weight_bike = left.text_input(':black[Weight of your bike? (kg)]', weight_bike0)
+weight_bike = left.text_input('Weight of your bike? (kg)', weight_bike0)
 bike_type = right.selectbox('Type of your bike:', ('road', 'trekking/gravel', 'MTB'), 0)
 tyre_resistance = (bike_type=='road')*4.2 + (bike_type=='trekking/gravel')*7 + (bike_type=='MTB')*12
 air_resistance = (bike_type=='road')*.185 + (bike_type=='trekking/gravel')*.23 + (bike_type=='MTB')*.25
